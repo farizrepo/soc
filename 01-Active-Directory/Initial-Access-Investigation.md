@@ -1,5 +1,52 @@
 Here is a simple flow chart:
 
+
+```
+flowchart LR
+
+    subgraph ATTACKER["🔴 ATTACKER"]
+        A["💻 Attacker / Hacker"]
+    end
+
+    subgraph PROCESS["⚙️ PROCESS"]
+        P1["1. Discovery and Enumeration"]
+        P2["2. Server Responds"]
+        P3["3. Deploy the Web Shell"]
+        P4["4. Execute Commands"]
+        P5["5. Server Responds"]
+    end
+
+    subgraph SERVER["🟢 IIS WEB SERVER"]
+        S1["🖥️ IIS Web Server"]
+        S2["C:\inetpub\wwwroot\"]
+        S3["web.config"]
+        S4["/images/"]
+        S5["/scripts/"]
+        S6["/internalapp/"]
+        S7["upload.aspx"]
+
+        S1 --> S2
+        S2 --> S3
+        S2 --> S4
+        S2 --> S5
+        S2 --> S6
+        S6 --> S7
+    end
+
+    A --> P1
+    P1 --> S1
+    S1 --> P2
+    P2 --> A
+    A --> P3
+    P3 --> S1
+    A --> P4
+    P4 --> S1
+    S1 --> P5
+    P5 --> A
+```
+
+
+
 ```mermaid
 graph LR;
   A["💻 Attacker / Hacker"]
