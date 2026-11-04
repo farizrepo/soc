@@ -322,6 +322,12 @@ graph LR;
 #### Detection & Investigation
 
 **1. Find the Compromised Account by looking at NPS denial events**
+
+Detection Logic Summary:
+- **Error Volume:** Per-5-minute count of NPS `6273` (access denied) events per `User_Account_Name`.
+- **Success Signal:** Per-5-minute count of NPS `6272` (access granted) events for the same account, in the same bucket.
+- **Interpretation:** A high volume of VPN denials concentrated on one account is characteristic of password spraying or brute forcing against the VPN/NPS endpoint. If `granted` is also present for the same account in the same window — or shortly after — the credential attack likely succeeded, and the `client_ips` field shows where the successful VPN session originated. Sorting by `denied` descending puts the most heavily attacked accounts at the top for triage.
+  
 ```
 index=win EventCode IN (6272,6273)
 | bin _time span=5m
@@ -333,14 +339,32 @@ index=win EventCode IN (6272,6273)
 | sort - denied
 ```
 ****
+![image alt](https://github.com/farizrepo/soc/blob/baddcbeabbc59a71b87aa7a7ec857e648e5f9204/source/NPS-denial-events-acc.png)
 
 **2. Correlating Compromised Account with  Security Logon Events**
 
+Detection Logic Summary:
+- **Scope:** All `4624` / `4625` events for the specific `{COMPROMISED_ACCOUNT}` identified in the NPS denial analysis.
+- **Error Volume:** Per-minute count of `4625` (failed logon) events for that account.
+- **Success Signal:** Per-minute count of `4624` (successful logon) events for the same account, in the same bucket.
+- **Interpretation:** This builds a per-minute timeline of failed vs. successful logons for the compromised account. A burst of `4625` followed by `4624` marks the brute-force window and the exact minute the attacker gained access; subsequent `4624` events reveal where and when the stolen credentials were reused (e.g. lateral movement or interactive logon). Sorting by `_time` preserves the attack sequence for timeline reconstruction.
+  
 ```
 index=win EventCode IN (4624, 4625) user={COMPROMISED_ACCOUNT}
-| table _time, host, user, EventCode, Logon_Type
+| bin _time span=1m
+| stats count(eval(EventCode=4625)) as failed
+        count(eval(EventCode=4624)) as success
+        by _time user
 | sort _time
 
 ```
+![image alt](https://github.com/farizrepo/soc/blob/baddcbeabbc59a71b87aa7a7ec857e648e5f9204/source/correlating-compromised-acc-with-seclog.png)
 
  #### MITRE ATT&CK Summary
+|Tactic                       |Technique ID|Technique Name          |IOC                                                                                                                             |
+|-----------------------------|------------|------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+|Credential Access            |T1110.003   |Password Spraying       |Multiple NPS Event ID 6273 (Access Denied) events targeting the same VPN account within a 5-minute window.                      |
+|Credential Access            |T1110.001   |Password Guessing       |Repeated VPN authentication failures (Event ID 6273) against a targeted user account.                                           |
+|Initial Access               |T1133       |External Remote Services|VPN authentication through the NPS server; Event ID 6272 (Access Granted) indicates a successful authentication.                |
+|Defense Evasion / Persistence|T1078       |Valid Accounts          |Compromised VPN account successfully authenticated, evidenced by NPS Event ID 6272 and Windows Security Event ID 4624.          |
+|Credential Access            |T1110       |Brute Force             |Repeated failed authentication attempts (Event ID 6273 and 4625) followed by successful authentication (Event ID 6272 and 4624).|
