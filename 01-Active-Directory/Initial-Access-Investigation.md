@@ -2,6 +2,58 @@
 
 ### Introduction
 initial access attacks against 3 of the most common: IIS web applications, Exchange OWA, and VPN gateways
+
+
+```mermaid
+graph LR;
+  A["💻 Attacker / Hacker"]
+
+    subgraph DMZ["🔴 DMZ - Demilitarized Zone"]
+        direction TB
+        B["🌐 Web Application"]
+        C["📧 Exchange Server"]
+        D["🔥 VPN Gateway"]
+    end
+
+    subgraph INTERNAL["🟢 Internal Network"]
+        direction TB
+        E["🖥️ Domain Controller"]
+        F["📁 File Server"]
+        G["🗄️ SQL Server"]
+        H["👨‍💻 Workstation"]
+    end
+
+    A --> B
+    A --> C
+    A --> D
+
+    B --> E
+    C --> E
+    D --> E
+
+    E <--> F
+    E <--> G
+    E <--> H
+
+    E --> I["🚨 IMPACT: ENTIRE DOMAIN"]
+
+    style A fill:#263b63,color:#fff,stroke:#263b63
+    style B fill:#e8f5e9,stroke:#7ac943,color:#222
+    style C fill:#e8f5e9,stroke:#7ac943,color:#222
+    style D fill:#e8f5e9,stroke:#7ac943,color:#222
+    style E fill:#d9ecff,stroke:#168bd2,color:#222
+    style F fill:#e8f5e9,stroke:#7ac943,color:#222
+    style G fill:#e8f5e9,stroke:#7ac943,color:#222
+    style H fill:#e8f5e9,stroke:#7ac943,color:#222
+    style I fill:#ffe5e5,stroke:#ff334d,color:#d00,stroke-width:3px
+
+    style DMZ fill:#fff,color:#000000,stroke:#ff334d,stroke-width:2px,stroke-dasharray:5 5
+    style INTERNAL fill:#fff,color:#000000,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5
+
+    linkStyle 0,1,2,3,4,5 stroke:#ff3333,stroke-width:2.5px
+    linkStyle 6,7,8,9 stroke:#22aa55,stroke-width:2.5px
+```
+
 #### Normal vs Suspicious IIS Patterns
 
 | **Pattern** | **Field** | **Normal** | **Suspicious** |
@@ -13,7 +65,7 @@ initial access attacks against 3 of the most common: IIS web applications, Excha
 | HTTP methods | `cs_method`, `cs_uri_stem` | GET for pages, POST for login forms | POST to `/aspnet_client/shell.aspx` (a static file directory) |
 | HTTP status codes | `sc_status`, `c_ip` | Occasional 404s from typos | Hundreds of 404s from a single IP in minutes (directory scanning) |
 
-###  A. Web Shell Attack
+###  1. Web Shell Attack
 
 ```mermaid
 graph LR;
@@ -132,57 +184,6 @@ graph LR;
     linkStyle 4 stroke:#7ac943,stroke-width:2.5px
 ```
 
-
-```mermaid
-graph LR;
-  A["💻 Attacker / Hacker"]
-
-    subgraph DMZ["🔴 DMZ - Demilitarized Zone"]
-        direction TB
-        B["🌐 Web Application"]
-        C["📧 Exchange Server"]
-        D["🔥 VPN Gateway"]
-    end
-
-    subgraph INTERNAL["🟢 Internal Network"]
-        direction TB
-        E["🖥️ Domain Controller"]
-        F["📁 File Server"]
-        G["🗄️ SQL Server"]
-        H["👨‍💻 Workstation"]
-    end
-
-    A --> B
-    A --> C
-    A --> D
-
-    B --> E
-    C --> E
-    D --> E
-
-    E <--> F
-    E <--> G
-    E <--> H
-
-    E --> I["🚨 IMPACT: ENTIRE DOMAIN"]
-
-    style A fill:#263b63,color:#fff,stroke:#263b63
-    style B fill:#e8f5e9,stroke:#7ac943,color:#222
-    style C fill:#e8f5e9,stroke:#7ac943,color:#222
-    style D fill:#e8f5e9,stroke:#7ac943,color:#222
-    style E fill:#d9ecff,stroke:#168bd2,color:#222
-    style F fill:#e8f5e9,stroke:#7ac943,color:#222
-    style G fill:#e8f5e9,stroke:#7ac943,color:#222
-    style H fill:#e8f5e9,stroke:#7ac943,color:#222
-    style I fill:#ffe5e5,stroke:#ff334d,color:#d00,stroke-width:3px
-
-    style DMZ fill:#fff,color:#000000,stroke:#ff334d,stroke-width:2px,stroke-dasharray:5 5
-    style INTERNAL fill:#fff,color:#000000,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5
-
-    linkStyle 0,1,2,3,4,5 stroke:#ff3333,stroke-width:2.5px
-    linkStyle 6,7,8,9 stroke:#22aa55,stroke-width:2.5px
-```
-
 #### Detection & Investigation
 **1. Find Suspicious IP**
 
@@ -241,4 +242,105 @@ OR
 |Discovery     |T1033       |System Owner/User Discovery           |Command: whoami                                            |
 |Discovery     |T1087.001   |Account Discovery: Local Account      |Command: net user                                          |
 
-### OWA (Outlook Email Web App) 
+### 2. OWA Exchange Server (On-Premise) Attack
+#### Detection & Investigation
+**1. OWA Authentication Endpoint Abuse**
+
+Detection Logic Summary:
+- **Subsearch (Baseline):** Count POST requests per source IP to `/owa/auth.owa` and keep only IPs exceeding 10 hits.
+- **Correlation:** Re-scan all IIS logs for those flagged IPs and break down their traffic by `c_ip` and `cs_uri_stem`.
+- **Interpretation:** `/owa/auth.owa` is the OWA login handler; legitimate users POST to it once per sign-in attempt. An IP firing dozens of POSTs at that single endpoint is characteristic of password spraying or credential stuffing against Exchange — the per-URI breakdown confirms the traffic is concentrated on the auth handler rather than normal browsing, and the `c_ip` set identifies the spraying sources to block or investigate further.
+
+```
+index=iis [
+    search index=iis cs_uri_stem="/owa/auth.owa" cs_method=POST
+    | stats count by c_ip
+    | where count > 10
+    | stats values(c_ip) as c_ip
+]
+| stats count by c_ip, cs_uri_stem
+| sort - count
+```
+![image alt](https://github.com/farizrepo/soc/blob/69a3cb43cc251bc2b87d07932097923074577a6a/source/owa-auth-failures.png)
+
+**2. Failed-then-Successful Logon Sequence (Brute Force → Compromise)**
+
+Detection Logic Summary:
+- **Error Volume:** Per-minute count of `4625` (failed logon) events per `user`.
+- **Success Signal:** Per-minute count of `4624` (successful logon) events for the same `user`, in the same bucket.
+- **Enrichment:** `Logon_Type` and `Process_Name` are carried along to distinguish interactive vs. network vs. service logons and to spot non-standard auth processes.
+- **Interpretation:** A spike of failed logons is brute force in progress; the presence of successful logons in the same minute for the same account is the classic "brute force succeeded" pattern — the last row with `failed_logins > 0 AND successful_logins > 0` is the moment of compromise to pivot from. Sorting by `failed_logins` descending puts the noisiest spray targets at the top for triage.
+
+```
+index=win EventCode IN (4624, 4625)
+| bin _time span=1m
+| stats count(eval(EventCode=4625)) as failed_logins
+        count(eval(EventCode=4624)) as successful_logins
+        values(EventCode)   as event_codes
+        values(Process_Name) as auth_process
+        values(Logon_Type)   as logon_types
+        by _time, user
+| table _time, user, failed_logins, successful_logins, event_codes, logon_types, auth_process
+| sort - failed_logins
+```
+![image alt](https://github.com/farizrepo/soc/blob/69a3cb43cc251bc2b87d07932097923074577a6a/source/bruteforce-compromise.png)
+
+#### MITRE ATT&CK Summary
+|Tactic           |Technique ID|Technique Name          |IOC / Evidence                                                                                                                      |
+|-----------------|------------|------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+|Initial Access   |T1133       |External Remote Services|Exchange OWA authentication endpoint abuse: POST /owa/auth.owa from source IP 203.0.113.47 (16 requests).                           |
+|Credential Access|T1110       |Brute Force             |Repeated authentication attempts against OWA. User sarah.kim recorded 9 failed logins at 10:40 and another 6 failed logins at 10:41.|
+|Credential Access|T1110.001   |Password Guessing       |Multiple failed authentication attempts against sarah.kim (Event ID 4625), followed by a successful authentication event.           
+|Initial Access   |T1078       |Valid Accounts          |User sarah.kim recorded 1 successful logon (Event ID 4624) at 10:41, alongside 6 failed logons in the same minute.                  |
+
+### 3.VPN Credential Attack
+```mermaid
+graph LR;
+    A["👤 User"]
+    B["🔥 VPN Gateway"]
+    C["🖥️ NPS Server<br/>(Network Policy Server)"]
+    D["🖥️ Domain Controller"]
+
+    A --> B
+    B -->|"RADIUS"| C
+    C -->|"LDAP"| D
+
+    C -.-> E["📋 Event 6272 / 6273<br/>NPS (RADIUS)"]
+    D -.-> F["📋 Event 4624 / 4625<br/>Active Directory"]
+
+    style A fill:#263b63,color:#fff,stroke:#263b63,stroke-width:2px
+    style B fill:#e8f5e9,color:#222,stroke:#7ac943,stroke-width:2px
+    style C fill:#d9ecff,color:#222,stroke:#168bd2,stroke-width:2px
+    style D fill:#d9ecff,color:#222,stroke:#168bd2,stroke-width:2px
+    style E fill:#fff9e6,color:#d99a00,stroke:#ffb900,stroke-width:2px
+    style F fill:#fff9e6,color:#d99a00,stroke:#ffb900,stroke-width:2px
+
+    linkStyle 0,1,2 stroke:#7ac943,stroke-width:2.5px
+    linkStyle 3,4 stroke:#ffb900,stroke-width:2px,stroke-dasharray:5 5
+```
+
+#### Detection & Investigation
+
+**1. Find the Compromised Account by looking at NPS denial events**
+```
+index=win EventCode IN (6272,6273)
+| bin _time span=5m
+| stats count(eval(EventCode=6273)) as denied
+        count(eval(EventCode=6272)) as granted
+        values(Client_IP_Address) as client_ips
+        by _time, User_Account_Name
+| table _time, User_Account_Name, denied, granted, client_ips
+| sort - denied
+```
+****
+
+**2. Correlating Compromised Account with  Security Logon Events**
+
+```
+index=win EventCode IN (4624, 4625) user={COMPROMISED_ACCOUNT}
+| table _time, host, user, EventCode, Logon_Type
+| sort _time
+
+```
+
+ #### MITRE ATT&CK Summary
