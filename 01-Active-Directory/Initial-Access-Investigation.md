@@ -65,13 +65,10 @@ subgraph ATTACKER["🔴 ATTACKER"]
     style S7 fill:#ffe5e5,color:#d00,stroke:#ff334d
 
     %% DIRECTORY TREE - GREEN
-    linkStyle 0,1,2,3,4,5 stroke:#8bea19,stroke-width:2px
+    linkStyle 0,1,2,3,4,5,8,9,14,15 stroke:#8bea19,stroke-width:2px
 
     %% REQUEST FLOW - RED
-    linkStyle 6,7,10,11,12,13 stroke:#ff1744,stroke-width:2px,stroke-dasharray:5 5
-
-    %% RESPONSE FLOW - GREEN
-    linkStyle 8,9,14,15 stroke:#8bea19,stroke-width:2px,stroke-dasharray:5 5
+    linkStyle 6,7,10,11,12,13 stroke:#ff1744,stroke-width:2px
 ```
 
 
