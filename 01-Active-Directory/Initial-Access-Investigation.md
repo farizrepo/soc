@@ -13,14 +13,7 @@ initial access attacks against 3 of the most common: IIS web applications, Excha
 | HTTP methods | `cs_method`, `cs_uri_stem` | GET for pages, POST for login forms | POST to `/aspnet_client/shell.aspx` (a static file directory) |
 | HTTP status codes | `sc_status`, `c_ip` | Occasional 404s from typos | Hundreds of 404s from a single IP in minutes (directory scanning) |
 
-###  Web Shell Attack
-#### Mitre Attack Mapping
-| Behavior | Tactic | Technique ID & Name |
-| --- | --- | --- |
-| Exploiting the IIS application to gain access | Initial Access | T1190: Exploit Public-Facing Application |
-| w3wp.exe spawning cmd.exe/powershell.exe to run commands | Execution | T1059: Command and Scripting Interpreter |
-| Deploying the .aspx web shell for persistent access | Persistence | T1505.003: Server Software Component: Web Shell |
-
+###  A. Web Shell Attack
 
 ```mermaid
 graph LR;
@@ -91,49 +84,6 @@ subgraph ATTACKER["🔴 ATTACKER"]
     %% REQUEST FLOW - RED
     linkStyle 6,7,10,11,12,13 stroke:#ff1744,stroke-width:2.5px
 ```
-
-#### Detection & Investigation
-**1. Find Suspicious IP**
-
-Detection Logic Summary:
-- **Error Volume:** More than avg 404 errors per minute.
-- **URI Diversity:** More than avg distinct URIs requested in the same minute.
-- **Interpretation:** A single source IP failing to find a large number of distinct paths is characteristic of a scanner probing for exploitable resources, rather than a normal user encountering broken links.
-
-```
-index=iis sc_status=404
-| bin _time span=1m
-| stats count AS error_count, dc(cs_uri_stem) AS unique_uris BY _time, c_ip
-| eventstats avg(error_count) AS avg_error_count, avg(unique_uris) AS avg_unique_uris
-| where error_count > avg_error_count AND unique_uris > avg_unique_uris
-| fields - avg_error_count, avg_unique_uris
-| sort - error_count
-```
-[<img width="1468" height="71" alt="image" src="https://github.com/user-attachments/assets/61d55add-553e-42b3-9fee-29cabefb593d" />](https://github.com/farizrepo/soc/blob/ad0017818337dd5c703cf26a9a9cd9f3c18c7084/source/1.%20finding%20ip.png)
-
-**2. Trace the Process Chain using Sysmon 1 and 11**
-```
-(index=win (EventCode=1 ParentImage="*\\w3wp.exe" Image IN ("*\\cmd.exe", "*\\powershell.exe")) 
- OR (EventCode=11 Image="*\\w3wp.exe" TargetFilename="*.aspx"))
-OR
-(index=iis)
-| eval time_bucket = strftime(_time, "%Y-%m-%d %H:%M")
-| eval http_request = if(isnotnull(cs_uri_stem),
-      cs_method . " " . cs_uri_stem . if(isnotnull(cs_uri_query), "?" . cs_uri_query, ""),
-      null())
-| stats values(ParentImage) as ParentImage
-        values(Image)          as child_process
-        values(CommandLine)    as process_cmdline
-        values(TargetFilename) as target_filename
-        values(c_ip)           as source_ip
-        values(http_request)   as http_requests
-        by host, time_bucket
-| where (isnotnull(child_process) AND isnotnull(http_requests)) OR isnotnull(target_filename)
-| table time_bucket, host, , ParentImage, child_process, process_cmdline, target_filename, source_ip, http_requests
-| sort time_bucket
-```
-![image alt](https://github.com/farizrepo/soc/blob/45e7c6ed9b1aa0a89d42118fb79986e32624059c/source/webshell-detection2.png)
-
 
 ```mermaid
 graph LR;
@@ -231,3 +181,64 @@ graph LR;
 
     linkStyle 0,1,2,3,4,5 stroke:#ff3333,stroke-width:2.5px
     linkStyle 6,7,8,9 stroke:#22aa55,stroke-width:2.5px
+```
+
+#### Detection & Investigation
+**1. Find Suspicious IP**
+
+Detection Logic Summary:
+- **Error Volume:** More than avg 404 errors per minute.
+- **URI Travel:** More than avg distinct URIs requested in the same minute.
+- **Interpretation:** A single source IP failing to find a large number of distinct paths is characteristic of a scanner probing for exploitable resources, rather than a normal user encountering broken links.
+
+```
+index=iis sc_status=404
+| bin _time span=1m
+| stats count AS error_count, dc(cs_uri_stem) AS unique_uris BY _time, c_ip
+| eventstats avg(error_count) AS avg_error_count, avg(unique_uris) AS avg_unique_uris
+| where error_count > avg_error_count AND unique_uris > avg_unique_uris
+| fields - avg_error_count, avg_unique_uris
+| sort - error_count
+```
+[<img width="1468" height="71" alt="image" src="https://github.com/user-attachments/assets/61d55add-553e-42b3-9fee-29cabefb593d" />](https://github.com/farizrepo/soc/blob/ad0017818337dd5c703cf26a9a9cd9f3c18c7084/source/1.%20finding%20ip.png)
+
+**2. Trace the Process Chain using Sysmon 1 and 11**
+
+Detection Logic Summary:
+- **Process Creation (Sysmon 1):** `w3wp.exe` (the IIS worker process) spawning `cmd.exe` or `powershell.exe`.
+- **File Creation (Sysmon 11):** `w3wp.exe` writing a `.aspx` file to disk — i.e. a web shell being dropped by the web server itself.
+- **Interpretation:** `w3wp.exe` is a long-lived service that only parses HTTP requests; it has no legitimate reason to spawn a command shell or to write executable ASPX content at runtime. Either event in isolation warrants review, but seeing it in the same minute as inbound requests to the host is a strong indicator of web-exploit → web shell / remote code execution, and the paired `http_requests` field usually reveals the exact exploit request.
+```
+(index=win (EventCode=1 ParentImage="*\\w3wp.exe" Image IN ("*\\cmd.exe", "*\\powershell.exe")) 
+ OR (EventCode=11 Image="*\\w3wp.exe" TargetFilename="*.aspx"))
+OR
+(index=iis)
+| eval time_bucket = strftime(_time, "%Y-%m-%d %H:%M")
+| eval http_request = if(isnotnull(cs_uri_stem),
+      cs_method . " " . cs_uri_stem . if(isnotnull(cs_uri_query), "?" . cs_uri_query, ""),
+      null())
+| stats values(ParentImage) as ParentImage
+        values(Image)          as child_process
+        values(CommandLine)    as process_cmdline
+        values(TargetFilename) as target_filename
+        values(c_ip)           as source_ip
+        values(http_request)   as http_requests
+        by host, time_bucket
+| where (isnotnull(child_process) AND isnotnull(http_requests)) OR isnotnull(target_filename)
+| table time_bucket, host, , ParentImage, child_process, process_cmdline, target_filename, source_ip, http_requests
+| sort time_bucket
+```
+![image alt](https://github.com/farizrepo/soc/blob/45e7c6ed9b1aa0a89d42118fb79986e32624059c/source/webshell-detection2.png)
+
+#### MITRE ATT&CK Summary
+|Tactic        |Technique ID|Technique Name                        |IOC                                                        |
+|--------------|------------|--------------------------------------|-----------------------------------------------------------|
+|Reconnaissance|T1595.003   |Wordlist Scanning                     |Source IP: 203.0.113.47; 74 unique URIs; 74 HTTP 404 errors|
+|Initial Access|T1190       |Exploit Public-Facing Application     |POST /internalapp/upload.aspx?file=shell.aspx              |
+|Persistence   |T1505.003   |Web Shell                             |C:\inetpub\wwwroot\aspnet_client\system_web\shell.aspx     |
+|Execution     |T1059.003   |Windows Command Shell                 |Parent: w3wp.exe; Child: cmd.exe                           |
+|Discovery     |T1016       |System Network Configuration Discovery|Command: ipconfig                                          |
+|Discovery     |T1033       |System Owner/User Discovery           |Command: whoami                                            |
+|Discovery     |T1087.001   |Account Discovery: Local Account      |Command: net user                                          |
+
+### OWA (Outlook Email Web App) 
