@@ -1,7 +1,7 @@
 Here is a simple flow chart:
 
 ```mermaid
-graph TD;
+graph LR;
   A["💻 Attacker / Hacker"]
 
     subgraph DMZ["🔴 DMZ - Demilitarized Zone"]
