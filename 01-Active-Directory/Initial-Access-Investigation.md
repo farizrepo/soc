@@ -1,5 +1,6 @@
 
 ### The Core Detection Pattern
+![image alt][<img width="1468" height="71" alt="image" src="https://github.com/user-attachments/assets/61d55add-553e-42b3-9fee-29cabefb593d" />](https://github.com/farizrepo/soc/blob/ad0017818337dd5c703cf26a9a9cd9f3c18c7084/source/1.%20finding%20ip.png)
 
 ```mermaid
 graph LR;
