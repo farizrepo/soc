@@ -45,4 +45,6 @@ graph LR;
 
     style DMZ fill:#fff,color:#000000,stroke:#ff334d,stroke-width:2px,stroke-dasharray:5 5
     style INTERNAL fill:#fff,color:#000000,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5
-```
+
+    linkStyle 0,1,2,3,4,5 stroke:#ff3333,stroke-width:2.5px
+    linkStyle 6,7,8,9 stroke:#22aa55,stroke-width:2.5px
