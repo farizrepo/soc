@@ -93,14 +93,47 @@ subgraph ATTACKER["🔴 ATTACKER"]
 ```
 
 #### Detection & Investigation
+**1. Find Suspicious IP**
+
+Detection Logic Summary:
+- **Error Volume:** More than avg 404 errors per minute.
+- **URI Diversity:** More than avg distinct URIs requested in the same minute.
+- **Interpretation:** A single source IP failing to find a large number of distinct paths is characteristic of a scanner probing for exploitable resources, rather than a normal user encountering broken links.
+
 ```
 index=iis sc_status=404
 | bin _time span=1m
 | stats count AS error_count, dc(cs_uri_stem) AS unique_uris BY _time, c_ip
-| where error_count > 30 AND unique_uris > 20
+| eventstats avg(error_count) AS avg_error_count, avg(unique_uris) AS avg_unique_uris
+| where error_count > avg_error_count AND unique_uris > avg_unique_uris
+| fields - avg_error_count, avg_unique_uris
 | sort - error_count
 ```
 [<img width="1468" height="71" alt="image" src="https://github.com/user-attachments/assets/61d55add-553e-42b3-9fee-29cabefb593d" />](https://github.com/farizrepo/soc/blob/ad0017818337dd5c703cf26a9a9cd9f3c18c7084/source/1.%20finding%20ip.png)
+
+**2. Trace the Process Chain using Sysmon 1 and 11**
+```
+(index=win (EventCode=1 ParentImage="*\\w3wp.exe" Image IN ("*\\cmd.exe", "*\\powershell.exe")) 
+ OR (EventCode=11 Image="*\\w3wp.exe" TargetFilename="*.aspx"))
+OR
+(index=iis)
+| eval time_bucket = strftime(_time, "%Y-%m-%d %H:%M")
+| eval http_request = if(isnotnull(cs_uri_stem),
+      cs_method . " " . cs_uri_stem . if(isnotnull(cs_uri_query), "?" . cs_uri_query, ""),
+      null())
+| stats values(ParentImage) as ParentImage
+        values(Image)          as child_process
+        values(CommandLine)    as process_cmdline
+        values(TargetFilename) as target_filename
+        values(c_ip)           as source_ip
+        values(http_request)   as http_requests
+        by host, time_bucket
+| where (isnotnull(child_process) AND isnotnull(http_requests)) OR isnotnull(target_filename)
+| table time_bucket, host, , ParentImage, child_process, process_cmdline, target_filename, source_ip, http_requests
+| sort time_bucket
+```
+![image alt](https://github.com/farizrepo/soc/blob/45e7c6ed9b1aa0a89d42118fb79986e32624059c/source/webshell-detection2.png)
+
 
 ```mermaid
 graph LR;
