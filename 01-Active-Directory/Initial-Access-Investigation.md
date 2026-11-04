@@ -3,8 +3,7 @@ Here is a simple flow chart:
 
 ```mermaid
 graph LR;
-
-    subgraph ATTACKER["🔴 ATTACKER"]
+subgraph ATTACKER["🔴 ATTACKER"]
         A["💻 Attacker / Hacker"]
     end
 
@@ -18,7 +17,7 @@ graph LR;
 
     subgraph SERVER["🟢 IIS WEB SERVER"]
         S1["🖥️ IIS Web Server"]
-        S2["C:\inetpub\wwwroot\"]
+        S2["C:\inetpub\wwwroot"]
         S3["web.config"]
         S4["/images/"]
         S5["/scripts/"]
@@ -43,6 +42,10 @@ graph LR;
     P4 --> S1
     S1 --> P5
     P5 --> A
+
+    style ATTACKER fill:#ffffff,stroke:#ff334d,stroke-width:2px,stroke-dasharray:5 5,color:#000000
+    style PROCESS fill:#ffffff,stroke:#e6a700,stroke-width:2px,stroke-dasharray:5 5,color:#000000
+    style SERVER fill:#ffffff,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5,color:#000000
 ```
 
 
