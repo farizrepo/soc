@@ -1,8 +1,8 @@
 Here is a simple flow chart:
 
 
-```
-flowchart LR
+```mermaid
+graph LR;
 
     subgraph ATTACKER["🔴 ATTACKER"]
         A["💻 Attacker / Hacker"]
