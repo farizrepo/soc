@@ -1,6 +1,26 @@
+## Initial Access
 
-### The Core Detection Pattern
-![image alt][<img width="1468" height="71" alt="image" src="https://github.com/user-attachments/assets/61d55add-553e-42b3-9fee-29cabefb593d" />](https://github.com/farizrepo/soc/blob/ad0017818337dd5c703cf26a9a9cd9f3c18c7084/source/1.%20finding%20ip.png)
+### Introduction
+initial access attacks against 3 of the most common: IIS web applications, Exchange OWA, and VPN gateways
+#### Normal vs Suspicious IIS Patterns
+
+| **Pattern** | **Field** | **Normal** | **Suspicious** |
+| :--- | :--- | :--- | :--- |
+| Authentication volume | `c_ip`, `sc_status` | A few login events per user throughout the day | Hundreds of login attempts from the same IP in minutes |
+| Request timing | `c_ip` | 09:15 login from 10.5.10.x (office subnet, business hours) | 03:22 login from 10.99.50.x (unknown subnet, outside hours) |
+| URI paths | `cs_uri_stem` | `/owa/`, `/ecp/`, `/internalapp/default.aspx` | `/aspnet_client/system_web/shell.aspx` or `/uploads/cmd.aspx` |
+| Query strings | `cs_uri_query` | `?ViewAction=ReadMessage&ItemID=AAM` | `?cmd=whoami` or `?exec=ipconfig` |
+| HTTP methods | `cs_method`, `cs_uri_stem` | GET for pages, POST for login forms | POST to `/aspnet_client/shell.aspx` (a static file directory) |
+| HTTP status codes | `sc_status`, `c_ip` | Occasional 404s from typos | Hundreds of 404s from a single IP in minutes (directory scanning) |
+
+###  Web Shell Attack
+#### Mitre Attack Mapping
+| Behavior | Tactic | Technique ID & Name |
+| --- | --- | --- |
+| Exploiting the IIS application to gain access | Initial Access | T1190: Exploit Public-Facing Application |
+| w3wp.exe spawning cmd.exe/powershell.exe to run commands | Execution | T1059: Command and Scripting Interpreter |
+| Deploying the .aspx web shell for persistent access | Persistence | T1505.003: Server Software Component: Web Shell |
+
 
 ```mermaid
 graph LR;
@@ -72,33 +92,46 @@ subgraph ATTACKER["🔴 ATTACKER"]
     linkStyle 6,7,10,11,12,13 stroke:#ff1744,stroke-width:2.5px
 ```
 
+#### Detection & Investigation
+```
+index=iis sc_status=404
+| bin _time span=1m
+| stats count AS error_count, dc(cs_uri_stem) AS unique_uris BY _time, c_ip
+| where error_count > 30 AND unique_uris > 20
+| sort - error_count
+```
+[<img width="1468" height="71" alt="image" src="https://github.com/user-attachments/assets/61d55add-553e-42b3-9fee-29cabefb593d" />](https://github.com/farizrepo/soc/blob/ad0017818337dd5c703cf26a9a9cd9f3c18c7084/source/1.%20finding%20ip.png)
+
 ```mermaid
 graph LR;
 
-    subgraph LEGITIMATE["🟢 LEGITIMATE"]
-        direction TB
-        A["w3wp.exe"]
-        B["No child processes"]
+    subgraph MAIN["PROCESS BEHAVIOR ANALYSIS"]
+        direction LR
 
-        A --> B
+        subgraph MALICIOUS["🔴 MALICIOUS"]
+            direction TB
+            C["w3wp.exe"]
+            D["cmd.exe"]
+            E["whoami.exe"]
+            F["net.exe"]
+            G["ipconfig.exe"]
+
+            C --> D
+            D --> E
+            D --> F
+            D --> G
+        end
+
+        subgraph LEGITIMATE["🟢 LEGITIMATE"]
+            direction TB
+            A["w3wp.exe"]
+            B["No child processes"]
+
+            A --> B
+        end
     end
 
-    subgraph MALICIOUS["🔴 MALICIOUS"]
-        direction TB
-        C["w3wp.exe"]
-        D["cmd.exe"]
-        E["whoami.exe"]
-        F["net.exe"]
-        G["ipconfig.exe"]
-
-        C --> D
-        D --> E
-        D --> F
-        D --> G
-    end
-
-    style A fill:#1b2b46,color:#9bea20,stroke:#1b2b46,stroke-width:2px
-    style B fill:#e8f5e9,color:#7ac943,stroke:#7ac943,stroke-width:2px
+    style MAIN fill:#ffffff,color:#1b2b46,stroke:#1b2b46,stroke-width:2px
 
     style C fill:#1b2b46,color:#9bea20,stroke:#1b2b46,stroke-width:2px
     style D fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
@@ -106,11 +139,14 @@ graph LR;
     style F fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
     style G fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
 
-    style LEGITIMATE fill:#ffffff,color:#7ac943,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5
-    style MALICIOUS fill:#ffffff,color:#ff1744,stroke:#ff1744,stroke-width:2px,stroke-dasharray:5 5
+    style A fill:#1b2b46,color:#9bea20,stroke:#1b2b46,stroke-width:2px
+    style B fill:#e8f5e9,color:#7ac943,stroke:#7ac943,stroke-width:2px
 
-    linkStyle 0 stroke:#7ac943,stroke-width:2.5px
-    linkStyle 1,2,3,4 stroke:#ff1744,stroke-width:2.5px
+    style MALICIOUS fill:#ffffff,color:#ff1744,stroke:#ff1744,stroke-width:2px,stroke-dasharray:5 5
+    style LEGITIMATE fill:#ffffff,color:#7ac943,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5
+
+    linkStyle 0,1,2,3 stroke:#ff1744,stroke-width:2.5px
+    linkStyle 4 stroke:#7ac943,stroke-width:2.5px
 ```
 
 
