@@ -71,6 +71,46 @@ subgraph ATTACKER["🔴 ATTACKER"]
     linkStyle 6,7,10,11,12,13 stroke:#ff1744,stroke-width:2.5px
 ```
 
+```mermaid
+graph LR;
+
+    subgraph LEGITIMATE["🟢 LEGITIMATE"]
+        direction TB
+        A["w3wp.exe"]
+        B["No child processes"]
+
+        A --> B
+    end
+
+    subgraph MALICIOUS["🔴 MALICIOUS"]
+        direction TB
+        C["w3wp.exe"]
+        D["cmd.exe"]
+        E["whoami.exe"]
+        F["net.exe"]
+        G["ipconfig.exe"]
+
+        C --> D
+        D --> E
+        D --> F
+        D --> G
+    end
+
+    style A fill:#1b2b46,color:#9bea20,stroke:#1b2b46,stroke-width:2px
+    style B fill:#e8f5e9,color:#7ac943,stroke:#7ac943,stroke-width:2px
+
+    style C fill:#1b2b46,color:#9bea20,stroke:#1b2b46,stroke-width:2px
+    style D fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
+    style E fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
+    style F fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
+    style G fill:#1b2b46,color:#ff1744,stroke:#1b2b46,stroke-width:2px
+
+    style LEGITIMATE fill:#ffffff,color:#7ac943,stroke:#7ac943,stroke-width:2px,stroke-dasharray:5 5
+    style MALICIOUS fill:#ffffff,color:#ff1744,stroke:#ff1744,stroke-width:2px,stroke-dasharray:5 5
+
+    linkStyle 0 stroke:#7ac943,stroke-width:2.5px
+    linkStyle 1,2,3,4 stroke:#ff1744,stroke-width:2.5px
+```
 
 
 ```mermaid
