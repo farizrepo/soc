@@ -166,28 +166,25 @@ not as standalone proof of compromise.
 
 ## END OF PLAYBOOK
 
-
-# Case
-
 An incident involving the `svc_backup` service account has been escalated for immediate forensic investigation. While the account was authenticated with valid credentials, the activity deviates from its normal baseline.
 
 Initial evidence indicates a successful VPN authentication from an unknown external IP address, followed by an RDP connection to the server `INIT-ACC-01`. You will focus on validating that a local session was successfully established by identifying the specific Windows logon type and verifying the initialization of the user environment through Registry artifacts.
 
-# Initialization
+# Analysis
 
 
 ```python
 from pathlib import Path
+from IPython.display import display as ipy_display, Markdown
 import re
 import pandas as pd
 import os
-from pathlib import Path
 import xml.etree.ElementTree as ET
 from Evtx.Evtx import Evtx
 from Registry import Registry
 ```
 
-Data source list
+
 ```python
 for p in Path("./dataset").iterdir():
     print(p.name)
@@ -201,7 +198,7 @@ for p in Path("./dataset").iterdir():
     NTUSER.DAT
 
 
-Data processing
+
 ```python
 pd.set_option("display.max_rows", None)
 
@@ -324,6 +321,33 @@ for line in nps_path.read_text(errors="replace").splitlines():
 
 df_nps_txt = pd.DataFrame(nps_records)
 
+def display_md(df):
+    """Render a DataFrame as a Markdown table without Pandas HTML/CSS output."""
+    if df.empty:
+        ipy_display(Markdown("_No data available._"))
+        return
+
+    def format_cell(value):
+        if value is None:
+            return ""
+        if not isinstance(value, (list, tuple, dict)) and pd.isna(value):
+            return ""
+        return str(value).replace("|", r"\|").replace("\r", "").replace("\n", "<br>")
+
+    headers = [format_cell(column) for column in df.columns]
+    rows = [
+        [format_cell(value) for value in row]
+        for row in df.itertuples(index=False, name=None)
+    ]
+
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
+    ]
+    lines.extend("| " + " | ".join(row) + " |" for row in rows)
+
+    ipy_display(Markdown("\\n".join(lines)))
+
 # Summarize all datasets
 for name, df in datasets.items():
 
@@ -350,7 +374,7 @@ for name, df in datasets.items():
     print(f"Rows: {df.shape[0]} | Columns: {df.shape[1]}")
     print(f"{'='*60}")
 
-    display(summary_df)
+    display_md(summary_df)
 ```
 
     df_rdpremote: 21 records imported
@@ -364,76 +388,7 @@ for name, df in datasets.items():
 
 
 
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>field</th>
-      <th>type</th>
-      <th>unique_amount</th>
-      <th>sample</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>EventRecord</td>
-      <td>int64</td>
-      <td>21</td>
-      <td>[1, 2, 3]</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>Timestamp</td>
-      <td>datetime64[us, UTC]</td>
-      <td>21</td>
-      <td>[2026-05-12 04:43:20.818308+00:00, 2026-05-12 ...</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>EventID</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[261, 1149]</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>Computer</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[INIT-ACC-01.global-tek.local]</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>listenerName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[RDP-Tcp]</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>Param3</td>
-      <td>str</td>
-      <td>4</td>
-      <td>[10.10.10.60, 10.10.10.53, 10.10.10.58]</td>
-    </tr>
-  </tbody>
-</table>
-</div>
+| field | type | unique_amount | sample |\n| --- | --- | --- | --- |\n| EventRecord | int64 | 21 | ['1', '2', '3'] |\n| Timestamp | datetime64[us, UTC] | 21 | ['2026-05-12 04:43:20.818308+00:00', '2026-05-12 04:43:20.895859+00:00', '2026-05-12 04:53:08.132788+00:00'] |\n| EventID | str | 2 | ['261', '1149'] |\n| Computer | str | 1 | ['INIT-ACC-01.global-tek.local'] |\n| listenerName | str | 1 | ['RDP-Tcp'] |\n| Param3 | str | 4 | ['10.10.10.60', '10.10.10.53', '10.10.10.58'] |
 
 
     
@@ -444,741 +399,7 @@ for name, df in datasets.items():
 
 
 
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>field</th>
-      <th>type</th>
-      <th>unique_amount</th>
-      <th>sample</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>EventRecord</td>
-      <td>int64</td>
-      <td>809</td>
-      <td>[1, 2, 3]</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>Timestamp</td>
-      <td>datetime64[us, UTC]</td>
-      <td>808</td>
-      <td>[2026-05-12 04:29:12.171082+00:00, 2026-05-12 ...</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>EventID</td>
-      <td>str</td>
-      <td>14</td>
-      <td>[4672, 4624, 4634]</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>Computer</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[INIT-ACC-01.global-tek.local]</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>SubjectUserSid</td>
-      <td>str</td>
-      <td>11</td>
-      <td>[S-1-5-18, S-1-0-0, S-1-5-21-1355340450-508628...</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>SubjectUserName</td>
-      <td>str</td>
-      <td>11</td>
-      <td>[INIT-ACC-01$, -, SYSTEM]</td>
-    </tr>
-    <tr>
-      <th>6</th>
-      <td>SubjectDomainName</td>
-      <td>str</td>
-      <td>4</td>
-      <td>[GLOBALTEK, -, NT AUTHORITY]</td>
-    </tr>
-    <tr>
-      <th>7</th>
-      <td>SubjectLogonId</td>
-      <td>str</td>
-      <td>200</td>
-      <td>[0x000000000074f90b, 0x0000000000000000, 0x000...</td>
-    </tr>
-    <tr>
-      <th>8</th>
-      <td>PrivilegeList</td>
-      <td>str</td>
-      <td>6</td>
-      <td>[SeSecurityPrivilege\n\t\t\tSeBackupPrivilege\...</td>
-    </tr>
-    <tr>
-      <th>9</th>
-      <td>TargetUserSid</td>
-      <td>str</td>
-      <td>22</td>
-      <td>[S-1-5-18, S-1-5-21-1355340450-508628708-81563...</td>
-    </tr>
-    <tr>
-      <th>10</th>
-      <td>TargetUserName</td>
-      <td>str</td>
-      <td>29</td>
-      <td>[INIT-ACC-01$, SYSTEM, Administrator]</td>
-    </tr>
-    <tr>
-      <th>11</th>
-      <td>TargetDomainName</td>
-      <td>str</td>
-      <td>7</td>
-      <td>[GLOBAL-TEK.LOCAL, GLOBALTEK, NT AUTHORITY]</td>
-    </tr>
-    <tr>
-      <th>12</th>
-      <td>TargetLogonId</td>
-      <td>str</td>
-      <td>272</td>
-      <td>[0x000000000074f90b, 0x000000000074f994, 0x000...</td>
-    </tr>
-    <tr>
-      <th>13</th>
-      <td>LogonType</td>
-      <td>str</td>
-      <td>4</td>
-      <td>[3, 5, 2]</td>
-    </tr>
-    <tr>
-      <th>14</th>
-      <td>LogonProcessName</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[Kerberos, Advapi&nbsp;&nbsp;, IAS]</td>
-    </tr>
-    <tr>
-      <th>15</th>
-      <td>AuthenticationPackageName</td>
-      <td>str</td>
-      <td>4</td>
-      <td>[Kerberos, Negotiate, MICROSOFT_AUTHENTICATION...</td>
-    </tr>
-    <tr>
-      <th>16</th>
-      <td>WorkstationName</td>
-      <td>str</td>
-      <td>7</td>
-      <td>[-, EC2AMAZ-KNARVHI, INIT-ACC-01]</td>
-    </tr>
-    <tr>
-      <th>17</th>
-      <td>LogonGuid</td>
-      <td>str</td>
-      <td>18</td>
-      <td>[{0dd8d67e-0df5-5f72-55ca-0486fe97152f}, {9037...</td>
-    </tr>
-    <tr>
-      <th>18</th>
-      <td>TransmittedServices</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>19</th>
-      <td>LmPackageName</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[-, NTLM V2]</td>
-    </tr>
-    <tr>
-      <th>20</th>
-      <td>KeyLength</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[0, 128]</td>
-    </tr>
-    <tr>
-      <th>21</th>
-      <td>ProcessId</td>
-      <td>str</td>
-      <td>12</td>
-      <td>[0x0000000000000000, 0x0000000000000248, 0x000...</td>
-    </tr>
-    <tr>
-      <th>22</th>
-      <td>ProcessName</td>
-      <td>str</td>
-      <td>4</td>
-      <td>[-, C:\Windows\System32\services.exe, C:\Windo...</td>
-    </tr>
-    <tr>
-      <th>23</th>
-      <td>IpAddress</td>
-      <td>str</td>
-      <td>9</td>
-      <td>[fe80::116e:b6a8:bd4b:d6f1, ::1, 172.31.17.190]</td>
-    </tr>
-    <tr>
-      <th>24</th>
-      <td>IpPort</td>
-      <td>str</td>
-      <td>155</td>
-      <td>[51839, 51840, 0]</td>
-    </tr>
-    <tr>
-      <th>25</th>
-      <td>ImpersonationLevel</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[%%1833, %%1840]</td>
-    </tr>
-    <tr>
-      <th>26</th>
-      <td>RestrictedAdminMode</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[-, %%1843]</td>
-    </tr>
-    <tr>
-      <th>27</th>
-      <td>TargetOutboundUserName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>28</th>
-      <td>TargetOutboundDomainName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>29</th>
-      <td>VirtualAccount</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[%%1843, %%1842]</td>
-    </tr>
-    <tr>
-      <th>30</th>
-      <td>TargetLinkedLogonId</td>
-      <td>str</td>
-      <td>49</td>
-      <td>[0x0000000000000000, 0x000000000076f2d1, 0x000...</td>
-    </tr>
-    <tr>
-      <th>31</th>
-      <td>ElevatedToken</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[%%1842, %%1843]</td>
-    </tr>
-    <tr>
-      <th>32</th>
-      <td>ObjectServer</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[DS]</td>
-    </tr>
-    <tr>
-      <th>33</th>
-      <td>ObjectType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[%{19195a5b-6da0-11d0-afd3-00c04fd930c9}]</td>
-    </tr>
-    <tr>
-      <th>34</th>
-      <td>ObjectName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[%{bdb4ca05-9e6c-48ae-96c4-026c917decd9}]</td>
-    </tr>
-    <tr>
-      <th>35</th>
-      <td>OperationType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[Object Access]</td>
-    </tr>
-    <tr>
-      <th>36</th>
-      <td>HandleId</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x0000000000000000]</td>
-    </tr>
-    <tr>
-      <th>37</th>
-      <td>AccessList</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[%%7688\n\t\t\t\t]</td>
-    </tr>
-    <tr>
-      <th>38</th>
-      <td>AccessMask</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x00000100]</td>
-    </tr>
-    <tr>
-      <th>39</th>
-      <td>Properties</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[%%7688\n\t\t{1131f6aa-9c07-11d1-f79f-00c04fc2...</td>
-    </tr>
-    <tr>
-      <th>40</th>
-      <td>AdditionalInfo</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>41</th>
-      <td>AdditionalInfo2</td>
-      <td>float64</td>
-      <td>0</td>
-      <td>[]</td>
-    </tr>
-    <tr>
-      <th>42</th>
-      <td>PackageName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[MICROSOFT_AUTHENTICATION_PACKAGE_V1_0]</td>
-    </tr>
-    <tr>
-      <th>43</th>
-      <td>Workstation</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[EC2AMAZ-KNARVHI, EC2AMAZ-K4E6AT6, EC2AMAZ-PIQ...</td>
-    </tr>
-    <tr>
-      <th>44</th>
-      <td>Status</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x00000000]</td>
-    </tr>
-    <tr>
-      <th>45</th>
-      <td>TargetLogonGuid</td>
-      <td>str</td>
-      <td>11</td>
-      <td>[{00000000-0000-0000-0000-000000000000}, {b18d...</td>
-    </tr>
-    <tr>
-      <th>46</th>
-      <td>TargetServerName</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[localhost, INIT-ACC-01.global-tek.local]</td>
-    </tr>
-    <tr>
-      <th>47</th>
-      <td>TargetInfo</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[localhost, ldap/INIT-ACC-01.global-tek.local]</td>
-    </tr>
-    <tr>
-      <th>48</th>
-      <td>TargetSid</td>
-      <td>str</td>
-      <td>7</td>
-      <td>[S-1-5-21-1355340450-508628708-815639551-1008,...</td>
-    </tr>
-    <tr>
-      <th>49</th>
-      <td>ServiceName</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[krbtgt, INIT-ACC-01$]</td>
-    </tr>
-    <tr>
-      <th>50</th>
-      <td>ServiceSid</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[S-1-5-21-1355340450-508628708-815639551-502, ...</td>
-    </tr>
-    <tr>
-      <th>51</th>
-      <td>TicketOptions</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[0x40810010, 0x40810000]</td>
-    </tr>
-    <tr>
-      <th>52</th>
-      <td>TicketEncryptionType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x00000012]</td>
-    </tr>
-    <tr>
-      <th>53</th>
-      <td>PreAuthType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[2]</td>
-    </tr>
-    <tr>
-      <th>54</th>
-      <td>CertIssuerName</td>
-      <td>float64</td>
-      <td>0</td>
-      <td>[]</td>
-    </tr>
-    <tr>
-      <th>55</th>
-      <td>CertSerialNumber</td>
-      <td>float64</td>
-      <td>0</td>
-      <td>[]</td>
-    </tr>
-    <tr>
-      <th>56</th>
-      <td>CertThumbprint</td>
-      <td>float64</td>
-      <td>0</td>
-      <td>[]</td>
-    </tr>
-    <tr>
-      <th>57</th>
-      <td>ResponseTicket</td>
-      <td>str</td>
-      <td>10</td>
-      <td>[CIJNzF+b9drfxoQDlhFCEfv8FUuvndLIJMsM6iP6hjY=,...</td>
-    </tr>
-    <tr>
-      <th>58</th>
-      <td>AccountSupportedEncryptionTypes</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[0x1F (DES, RC4, AES128-SHA96, AES256-SHA96), ...</td>
-    </tr>
-    <tr>
-      <th>59</th>
-      <td>AccountAvailableKeys</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[AES-SHA1, RC4, N/A]</td>
-    </tr>
-    <tr>
-      <th>60</th>
-      <td>ServiceSupportedEncryptionTypes</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x1F (DES, RC4, AES128-SHA96, AES256-SHA96)]</td>
-    </tr>
-    <tr>
-      <th>61</th>
-      <td>ServiceAvailableKeys</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[AES-SHA1, RC4]</td>
-    </tr>
-    <tr>
-      <th>62</th>
-      <td>DCSupportedEncryptionTypes</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x1F (DES, RC4, AES128-SHA96, AES256-SHA96)]</td>
-    </tr>
-    <tr>
-      <th>63</th>
-      <td>DCAvailableKeys</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[AES-SHA1, RC4]</td>
-    </tr>
-    <tr>
-      <th>64</th>
-      <td>ClientAdvertizedEncryptionTypes</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[\n\t\tAES256-CTS-HMAC-SHA1-96\n\t\tRC4-HMAC-N...</td>
-    </tr>
-    <tr>
-      <th>65</th>
-      <td>SessionKeyEncryptionType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x00000012]</td>
-    </tr>
-    <tr>
-      <th>66</th>
-      <td>PreAuthEncryptionType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x00000012]</td>
-    </tr>
-    <tr>
-      <th>67</th>
-      <td>RequestTicketHash</td>
-      <td>str</td>
-      <td>10</td>
-      <td>[CIJNzF+b9drfxoQDlhFCEfv8FUuvndLIJMsM6iP6hjY=,...</td>
-    </tr>
-    <tr>
-      <th>68</th>
-      <td>ResponseTicketHash</td>
-      <td>str</td>
-      <td>10</td>
-      <td>[sHU3KD4rFVuKtPW9+Ip5YwM1egZv1rJPOBb6KxakK1A=,...</td>
-    </tr>
-    <tr>
-      <th>69</th>
-      <td>FullyQualifiedSubjectUserName</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[global-tek.local/Users/it_bhardy, global-tek....</td>
-    </tr>
-    <tr>
-      <th>70</th>
-      <td>SubjectMachineSID</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[S-1-0-0]</td>
-    </tr>
-    <tr>
-      <th>71</th>
-      <td>SubjectMachineName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>72</th>
-      <td>FullyQualifiedSubjectMachineName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>73</th>
-      <td>CalledStationID</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[172.31.17.190]</td>
-    </tr>
-    <tr>
-      <th>74</th>
-      <td>CallingStationID</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[15.135.92.124, 3.25.161.84, 15.135.87.2]</td>
-    </tr>
-    <tr>
-      <th>75</th>
-      <td>NASIPv4Address</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[172.31.17.190]</td>
-    </tr>
-    <tr>
-      <th>76</th>
-      <td>NASIPv6Address</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>77</th>
-      <td>NASIdentifier</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[INIT-ACC-01]</td>
-    </tr>
-    <tr>
-      <th>78</th>
-      <td>NASPortType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[Virtual]</td>
-    </tr>
-    <tr>
-      <th>79</th>
-      <td>NASPort</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[129, 130, 131]</td>
-    </tr>
-    <tr>
-      <th>80</th>
-      <td>ClientName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[INIT-ACC-01]</td>
-    </tr>
-    <tr>
-      <th>81</th>
-      <td>ClientIPAddress</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[172.31.17.190]</td>
-    </tr>
-    <tr>
-      <th>82</th>
-      <td>ProxyPolicyName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[Microsoft Routing and Remote Access Service P...</td>
-    </tr>
-    <tr>
-      <th>83</th>
-      <td>NetworkPolicyName</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[Connections to Microsoft Routing and Remote A...</td>
-    </tr>
-    <tr>
-      <th>84</th>
-      <td>AuthenticationProvider</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[Windows]</td>
-    </tr>
-    <tr>
-      <th>85</th>
-      <td>AuthenticationServer</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[INIT-ACC-01.global-tek.local]</td>
-    </tr>
-    <tr>
-      <th>86</th>
-      <td>AuthenticationType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[MS-CHAPv2]</td>
-    </tr>
-    <tr>
-      <th>87</th>
-      <td>EAPType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[-]</td>
-    </tr>
-    <tr>
-      <th>88</th>
-      <td>AccountSessionIdentifier</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[3139, 3230, 3231]</td>
-    </tr>
-    <tr>
-      <th>89</th>
-      <td>LoggingResult</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[Accounting information was not written to any...</td>
-    </tr>
-    <tr>
-      <th>90</th>
-      <td>CallerProcessId</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[0x00000000000003c0, 0x00000000000004e8]</td>
-    </tr>
-    <tr>
-      <th>91</th>
-      <td>CallerProcessName</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[C:\Windows\System32\consent.exe, C:\Windows\S...</td>
-    </tr>
-    <tr>
-      <th>92</th>
-      <td>ClientProcessId</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[8196, 4180, 7220]</td>
-    </tr>
-    <tr>
-      <th>93</th>
-      <td>ClientCreationTime</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[2026-05-12 04:43:48.658352+00:00, 2026-05-12 ...</td>
-    </tr>
-    <tr>
-      <th>94</th>
-      <td>ProviderName</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[Microsoft Software Key Storage Provider]</td>
-    </tr>
-    <tr>
-      <th>95</th>
-      <td>AlgorithmName</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[UNKNOWN, AES, ECDSA_P256]</td>
-    </tr>
-    <tr>
-      <th>96</th>
-      <td>KeyName</td>
-      <td>str</td>
-      <td>2</td>
-      <td>[Google Chromekey1, Microsoft Connected Device...</td>
-    </tr>
-    <tr>
-      <th>97</th>
-      <td>KeyType</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[%%2500]</td>
-    </tr>
-    <tr>
-      <th>98</th>
-      <td>KeyFilePath</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[C:\ProgramData\Microsoft\Crypto\SystemKeys\70...</td>
-    </tr>
-    <tr>
-      <th>99</th>
-      <td>Operation</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[%%2458, %%2480, %%2464]</td>
-    </tr>
-    <tr>
-      <th>100</th>
-      <td>ReturnCode</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[0x00000000]</td>
-    </tr>
-  </tbody>
-</table>
-</div>
+| field | type | unique_amount | sample |\n| --- | --- | --- | --- |\n| EventRecord | int64 | 809 | ['1', '2', '3'] |\n| Timestamp | datetime64[us, UTC] | 808 | ['2026-05-12 04:29:12.171082+00:00', '2026-05-12 04:29:12.212889+00:00', '2026-05-12 04:29:12.213255+00:00'] |\n| EventID | str | 14 | ['4672', '4624', '4634'] |\n| Computer | str | 1 | ['INIT-ACC-01.global-tek.local'] |\n| SubjectUserSid | str | 11 | ['S-1-5-18', 'S-1-0-0', 'S-1-5-21-1355340450-508628708-815639551-1611'] |\n| SubjectUserName | str | 11 | ['INIT-ACC-01$', '-', 'SYSTEM'] |\n| SubjectDomainName | str | 4 | ['GLOBALTEK', '-', 'NT AUTHORITY'] |\n| SubjectLogonId | str | 200 | ['0x000000000074f90b', '0x0000000000000000', '0x000000000074f994'] |\n| PrivilegeList | str | 6 | ['SeSecurityPrivilege\n\t\t\tSeBackupPrivilege\n\t\t\tSeRestorePrivilege\n\t\t\tSeTakeOwnershipPrivilege\n\t\t\tSeDebugPrivilege\n\t\t\tSeSystemEnvironmentPrivilege\n\t\t\tSeLoadDriverPrivilege\n\t\t\tSeImpersonatePrivilege\n\t\t\tSeDelegateSessionUserImpersonatePrivilege\n\t\t\tSeEnableDelegationPrivilege', 'SeAssignPrimaryTokenPrivilege\n\t\t\tSeTcbPrivilege\n\t\t\tSeSecurityPrivilege\n\t\t\tSeTakeOwnershipPrivilege\n\t\t\tSeLoadDriverPrivilege\n\t\t\tSeBackupPrivilege\n\t\t\tSeRestorePrivilege\n\t\t\tSeDebugPrivilege\n\t\t\tSeAuditPrivilege\n\t\t\tSeSystemEnvironmentPrivilege\n\t\t\tSeImpersonatePrivilege\n\t\t\tSeDelegateSessionUserImpersonatePrivilege', 'SeAssignPrimaryTokenPrivilege\n\t\t\tSeAuditPrivilege\n\t\t\tSeImpersonatePrivilege'] |\n| TargetUserSid | str | 22 | ['S-1-5-18', 'S-1-5-21-1355340450-508628708-815639551-500', 'S-1-5-96-0-2'] |\n| TargetUserName | str | 29 | ['INIT-ACC-01$', 'SYSTEM', 'Administrator'] |\n| TargetDomainName | str | 7 | ['GLOBAL-TEK.LOCAL', 'GLOBALTEK', 'NT AUTHORITY'] |\n| TargetLogonId | str | 272 | ['0x000000000074f90b', '0x000000000074f994', '0x000000000074fa8b'] |\n| LogonType | str | 4 | ['3', '5', '2'] |\n| LogonProcessName | str | 5 | ['Kerberos', 'Advapi  ', 'IAS'] |\n| AuthenticationPackageName | str | 4 | ['Kerberos', 'Negotiate', 'MICROSOFT_AUTHENTICATION_PACKAGE_V1_0'] |\n| WorkstationName | str | 7 | ['-', 'EC2AMAZ-KNARVHI', 'INIT-ACC-01'] |\n| LogonGuid | str | 18 | ['{0dd8d67e-0df5-5f72-55ca-0486fe97152f}', '{903774c9-cc87-f74d-a4fa-7e9a0410c190}', '{a58c8785-c0a2-712a-a937-b99445f2f70d}'] |\n| TransmittedServices | str | 1 | ['-'] |\n| LmPackageName | str | 2 | ['-', 'NTLM V2'] |\n| KeyLength | str | 2 | ['0', '128'] |\n| ProcessId | str | 12 | ['0x0000000000000000', '0x0000000000000248', '0x0000000000000640'] |\n| ProcessName | str | 4 | ['-', 'C:\\Windows\\System32\\services.exe', 'C:\\Windows\\System32\\svchost.exe'] |\n| IpAddress | str | 9 | ['fe80::116e:b6a8:bd4b:d6f1', '::1', '172.31.17.190'] |\n| IpPort | str | 155 | ['51839', '51840', '0'] |\n| ImpersonationLevel | str | 2 | ['%%1833', '%%1840'] |\n| RestrictedAdminMode | str | 2 | ['-', '%%1843'] |\n| TargetOutboundUserName | str | 1 | ['-'] |\n| TargetOutboundDomainName | str | 1 | ['-'] |\n| VirtualAccount | str | 2 | ['%%1843', '%%1842'] |\n| TargetLinkedLogonId | str | 49 | ['0x0000000000000000', '0x000000000076f2d1', '0x000000000076f12b'] |\n| ElevatedToken | str | 2 | ['%%1842', '%%1843'] |\n| ObjectServer | str | 1 | ['DS'] |\n| ObjectType | str | 1 | ['%{19195a5b-6da0-11d0-afd3-00c04fd930c9}'] |\n| ObjectName | str | 1 | ['%{bdb4ca05-9e6c-48ae-96c4-026c917decd9}'] |\n| OperationType | str | 1 | ['Object Access'] |\n| HandleId | str | 1 | ['0x0000000000000000'] |\n| AccessList | str | 1 | ['%%7688\n\t\t\t\t'] |\n| AccessMask | str | 1 | ['0x00000100'] |\n| Properties | str | 1 | ['%%7688\n\t\t{1131f6aa-9c07-11d1-f79f-00c04fc2dcd2}\n\t{19195a5b-6da0-11d0-afd3-00c04fd930c9}\n'] |\n| AdditionalInfo | str | 1 | ['-'] |\n| AdditionalInfo2 | float64 | 0 | [] |\n| PackageName | str | 1 | ['MICROSOFT_AUTHENTICATION_PACKAGE_V1_0'] |\n| Workstation | str | 5 | ['EC2AMAZ-KNARVHI', 'EC2AMAZ-K4E6AT6', 'EC2AMAZ-PIQU25B'] |\n| Status | str | 1 | ['0x00000000'] |\n| TargetLogonGuid | str | 11 | ['{00000000-0000-0000-0000-000000000000}', '{b18d926a-a327-0185-3c08-1b9b62922cb9}', '{1fba2d10-5b0e-2650-4b14-fb39747d33f2}'] |\n| TargetServerName | str | 2 | ['localhost', 'INIT-ACC-01.global-tek.local'] |\n| TargetInfo | str | 2 | ['localhost', 'ldap/INIT-ACC-01.global-tek.local'] |\n| TargetSid | str | 7 | ['S-1-5-21-1355340450-508628708-815639551-1008', 'S-1-5-21-1355340450-508628708-815639551-1610', 'S-1-5-32-544'] |\n| ServiceName | str | 2 | ['krbtgt', 'INIT-ACC-01$'] |\n| ServiceSid | str | 2 | ['S-1-5-21-1355340450-508628708-815639551-502', 'S-1-5-21-1355340450-508628708-815639551-1008'] |\n| TicketOptions | str | 2 | ['0x40810010', '0x40810000'] |\n| TicketEncryptionType | str | 1 | ['0x00000012'] |\n| PreAuthType | str | 1 | ['2'] |\n| CertIssuerName | float64 | 0 | [] |\n| CertSerialNumber | float64 | 0 | [] |\n| CertThumbprint | float64 | 0 | [] |\n| ResponseTicket | str | 10 | ['CIJNzF+b9drfxoQDlhFCEfv8FUuvndLIJMsM6iP6hjY=', 'jquzyqnUMbxjZR0TAm3O7cvJ68bpPx+/P6v5FH0aM80=', 'FrQYSHRiqmg4iaAHlb0VZUatMemo7x2n6IdhRV6vhks='] |\n| AccountSupportedEncryptionTypes | str | 3 | ['0x1F (DES, RC4, AES128-SHA96, AES256-SHA96)', 'N/A', '0x18 (AES128-SHA96, AES256-SHA96)'] |\n| AccountAvailableKeys | str | 2 | ['AES-SHA1, RC4', 'N/A'] |\n| ServiceSupportedEncryptionTypes | str | 1 | ['0x1F (DES, RC4, AES128-SHA96, AES256-SHA96)'] |\n| ServiceAvailableKeys | str | 1 | ['AES-SHA1, RC4'] |\n| DCSupportedEncryptionTypes | str | 1 | ['0x1F (DES, RC4, AES128-SHA96, AES256-SHA96)'] |\n| DCAvailableKeys | str | 1 | ['AES-SHA1, RC4'] |\n| ClientAdvertizedEncryptionTypes | str | 3 | ['\n\t\tAES256-CTS-HMAC-SHA1-96\n\t\tRC4-HMAC-NT\n\t\tRC4-HMAC-OLD\n\t\tRC4-MD4\n\t\tRC4-HMAC-NT-EXP\n\t\tRC4-HMAC-OLD-EXP', '\n\t\tAES256-CTS-HMAC-SHA1-96\n\t\tAES128-CTS-HMAC-SHA1-96\n\t\tRC4-HMAC-NT\n\t\tRC4-HMAC-NT-EXP\n\t\tRC4-HMAC-OLD-EXP', '\n\t\tAES256-CTS-HMAC-SHA1-96\n\t\tAES128-CTS-HMAC-SHA1-96\n\t\tRC4-HMAC-NT\n\t\tRC4-HMAC-NT-EXP\n\t\tRC4-HMAC-OLD-EXP\n\t\tDES-CBC-MD5'] |\n| SessionKeyEncryptionType | str | 1 | ['0x00000012'] |\n| PreAuthEncryptionType | str | 1 | ['0x00000012'] |\n| RequestTicketHash | str | 10 | ['CIJNzF+b9drfxoQDlhFCEfv8FUuvndLIJMsM6iP6hjY=', 'jquzyqnUMbxjZR0TAm3O7cvJ68bpPx+/P6v5FH0aM80=', 'FrQYSHRiqmg4iaAHlb0VZUatMemo7x2n6IdhRV6vhks='] |\n| ResponseTicketHash | str | 10 | ['sHU3KD4rFVuKtPW9+Ip5YwM1egZv1rJPOBb6KxakK1A=', 'IwpS4AmwBXXYnSeaRUqGsng98GrNhyUcimew1FetA5M=', 'CE1MxscmYHxYqRhYO0vB7JLlLgXj7LdII48hWc6TFho='] |\n| FullyQualifiedSubjectUserName | str | 5 | ['global-tek.local/Users/it_bhardy', 'global-tek.local/Users/hr_jsmith', 'global-tek.local/Users/fin_dwright'] |\n| SubjectMachineSID | str | 1 | ['S-1-0-0'] |\n| SubjectMachineName | str | 1 | ['-'] |\n| FullyQualifiedSubjectMachineName | str | 1 | ['-'] |\n| CalledStationID | str | 1 | ['172.31.17.190'] |\n| CallingStationID | str | 5 | ['15.135.92.124', '3.25.161.84', '15.135.87.2'] |\n| NASIPv4Address | str | 1 | ['172.31.17.190'] |\n| NASIPv6Address | str | 1 | ['-'] |\n| NASIdentifier | str | 1 | ['INIT-ACC-01'] |\n| NASPortType | str | 1 | ['Virtual'] |\n| NASPort | str | 5 | ['129', '130', '131'] |\n| ClientName | str | 1 | ['INIT-ACC-01'] |\n| ClientIPAddress | str | 1 | ['172.31.17.190'] |\n| ProxyPolicyName | str | 1 | ['Microsoft Routing and Remote Access Service Policy'] |\n| NetworkPolicyName | str | 2 | ['Connections to Microsoft Routing and Remote Access server', 'VPN_Allow'] |\n| AuthenticationProvider | str | 1 | ['Windows'] |\n| AuthenticationServer | str | 1 | ['INIT-ACC-01.global-tek.local'] |\n| AuthenticationType | str | 1 | ['MS-CHAPv2'] |\n| EAPType | str | 1 | ['-'] |\n| AccountSessionIdentifier | str | 5 | ['3139', '3230', '3231'] |\n| LoggingResult | str | 1 | ['Accounting information was not written to any data store.'] |\n| CallerProcessId | str | 2 | ['0x00000000000003c0', '0x00000000000004e8'] |\n| CallerProcessName | str | 2 | ['C:\\Windows\\System32\\consent.exe', 'C:\\Windows\\System32\\svchost.exe'] |\n| ClientProcessId | str | 3 | ['8196', '4180', '7220'] |\n| ClientCreationTime | str | 3 | ['2026-05-12 04:43:48.658352+00:00', '2026-05-12 05:06:36.070669+00:00', '2026-05-12 05:19:33.830389+00:00'] |\n| ProviderName | str | 1 | ['Microsoft Software Key Storage Provider'] |\n| AlgorithmName | str | 3 | ['UNKNOWN', 'AES', 'ECDSA_P256'] |\n| KeyName | str | 2 | ['Google Chromekey1', 'Microsoft Connected Devices Platform device certificate'] |\n| KeyType | str | 1 | ['%%2500'] |\n| KeyFilePath | str | 3 | ['C:\\ProgramData\\Microsoft\\Crypto\\SystemKeys\\7096db7aeb75c0d3497ecd56d355a695_0305366a-2d34-4125-a54a-9621bff11f32', 'C:\\Users\\it_bhardy\\AppData\\Roaming\\Microsoft\\Crypto\\Keys\\de7cf8a7901d2ad13e5c67c29e5d1662_0305366a-2d34-4125-a54a-9621bff11f32', 'C:\\Users\\adm_jross\\AppData\\Roaming\\Microsoft\\Crypto\\Keys\\de7cf8a7901d2ad13e5c67c29e5d1662_0305366a-2d34-4125-a54a-9621bff11f32'] |\n| Operation | str | 3 | ['%%2458', '%%2480', '%%2464'] |\n| ReturnCode | str | 1 | ['0x00000000'] |
 
 
     
@@ -1189,97 +410,7 @@ for name, df in datasets.items():
 
 
 
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>field</th>
-      <th>type</th>
-      <th>unique_amount</th>
-      <th>sample</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>EventRecord</td>
-      <td>int64</td>
-      <td>57</td>
-      <td>[1, 2, 3]</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>Timestamp</td>
-      <td>datetime64[us, UTC]</td>
-      <td>57</td>
-      <td>[2026-05-12 04:38:02.508286+00:00, 2026-05-12 ...</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>EventID</td>
-      <td>str</td>
-      <td>8</td>
-      <td>[41, 40, 25]</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>Computer</td>
-      <td>str</td>
-      <td>1</td>
-      <td>[INIT-ACC-01.global-tek.local]</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>User</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[GLOBALTEK\hr_jsmith, GLOBALTEK\it_bhardy, GLO...</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>SessionID</td>
-      <td>str</td>
-      <td>6</td>
-      <td>[8, 4, 3]</td>
-    </tr>
-    <tr>
-      <th>6</th>
-      <td>Session</td>
-      <td>str</td>
-      <td>6</td>
-      <td>[8, 4, 3]</td>
-    </tr>
-    <tr>
-      <th>7</th>
-      <td>Reason</td>
-      <td>str</td>
-      <td>3</td>
-      <td>[0, 5, 12]</td>
-    </tr>
-    <tr>
-      <th>8</th>
-      <td>Address</td>
-      <td>str</td>
-      <td>5</td>
-      <td>[10.10.10.61, 10.10.10.60, 10.10.10.53]</td>
-    </tr>
-  </tbody>
-</table>
-</div>
+| field | type | unique_amount | sample |\n| --- | --- | --- | --- |\n| EventRecord | int64 | 57 | ['1', '2', '3'] |\n| Timestamp | datetime64[us, UTC] | 57 | ['2026-05-12 04:38:02.508286+00:00', '2026-05-12 04:38:02.657610+00:00', '2026-05-12 04:38:04.301229+00:00'] |\n| EventID | str | 8 | ['41', '40', '25'] |\n| Computer | str | 1 | ['INIT-ACC-01.global-tek.local'] |\n| User | str | 5 | ['GLOBALTEK\\hr_jsmith', 'GLOBALTEK\\it_bhardy', 'GLOBALTEK\\fin_dwright'] |\n| SessionID | str | 6 | ['8', '4', '3'] |\n| Session | str | 6 | ['8', '4', '3'] |\n| Reason | str | 3 | ['0', '5', '12'] |\n| Address | str | 5 | ['10.10.10.61', '10.10.10.60', '10.10.10.53'] |
 
 
 # Hands-On Investigation
@@ -1293,53 +424,16 @@ At what time was access granted to the `svc_backup` account by the Network Polic
 
 ```python
 # Identify successful NPS authentication
-df_security[
+result = df_security[
     (df_security["EventID"] == "6272") &
     (df_security["FullyQualifiedSubjectUserName"].str.contains("svc_backup", case=False, na=False))
-][["Timestamp", "EventID", "FullyQualifiedSubjectUserName","CallingStationID", "CalledStationID"]]
+][["Timestamp", "EventID", "FullyQualifiedSubjectUserName", "CallingStationID", "CalledStationID"]]
+
+display_md(result)
 ```
 
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Timestamp</th>
-      <th>EventID</th>
-      <th>FullyQualifiedSubjectUserName</th>
-      <th>CallingStationID</th>
-      <th>CalledStationID</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>505</th>
-      <td>2026-05-12 05:11:57.581541+00:00</td>
-      <td>6272</td>
-      <td>global-tek.local/Users/svc_backup</td>
-      <td>216.128.153.60</td>
-      <td>172.31.17.190</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
+| Timestamp | EventID | FullyQualifiedSubjectUserName | CallingStationID | CalledStationID |\n| --- | --- | --- | --- | --- |\n| 2026-05-12 05:11:57.581541+00:00 | 6272 | global-tek.local/Users/svc_backup | 216.128.153.60 | 172.31.17.190 |
 
 
 ### Question 2 — Attacker's Remote IP Address
@@ -1351,49 +445,16 @@ What remote IP address did the attacker use to connect to the target machine?
 
 ```python
 # Identify successful NPS authentication
-df_security[
+result = df_security[
     (df_security["EventID"] == "6272") &
     (df_security["FullyQualifiedSubjectUserName"].str.contains("svc_backup", case=False, na=False))
-][["Timestamp", "EventID","CallingStationID"]]
+][["Timestamp", "EventID", "CallingStationID"]]
+
+display_md(result)
 ```
 
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Timestamp</th>
-      <th>EventID</th>
-      <th>CallingStationID</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>505</th>
-      <td>2026-05-12 05:11:57.581541+00:00</td>
-      <td>6272</td>
-      <td>216.128.153.60</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
+| Timestamp | EventID | CallingStationID |\n| --- | --- | --- |\n| 2026-05-12 05:11:57.581541+00:00 | 6272 | 216.128.153.60 |
 
 
 ### Question 3 — Assigned VPN Pool IP Address
@@ -1403,48 +464,15 @@ What VPN pool IP address was assigned to the `svc_backup` session?
 
 ```python
 # Identify assigned VPN pool IP
-df_nps_txt[
+result = df_nps_txt[
     df_nps_txt["User-Name"].str.contains("svc_backup", case=False, na=False)
 ][["Timestamp", "User-Name", "Framed-IP-Address"]]
+
+display_md(result)
 ```
 
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Timestamp</th>
-      <th>User-Name</th>
-      <th>Framed-IP-Address</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>3</th>
-      <td>05/12/2026 05:11:37.000</td>
-      <td>svc_backup</td>
-      <td>10.10.10.58</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
+| Timestamp | User-Name | Framed-IP-Address |\n| --- | --- | --- |\n| 05/12/2026 05:11:37.000 | svc_backup | 10.10.10.58 |
 
 
 ### Question 4 — Successful Logon GUID
@@ -1454,65 +482,17 @@ What is the unique Logon GUID associated with the `svc_backup` user's successful
 
 ```python
 # Identify successful RDP logon
-df_security[
+result = df_security[
     (df_security["EventID"] == "4624") &
     (df_security["TargetUserName"] == "svc_backup") &
     (df_security["LogonType"] == "10")
-][["Timestamp", "TargetUserName", "LogonType", "IpAddress","LogonGuid", "TargetLogonId"]]
+][["Timestamp", "TargetUserName", "LogonType", "IpAddress", "LogonGuid", "TargetLogonId"]]
+
+display_md(result)
 ```
 
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Timestamp</th>
-      <th>TargetUserName</th>
-      <th>LogonType</th>
-      <th>IpAddress</th>
-      <th>LogonGuid</th>
-      <th>TargetLogonId</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>540</th>
-      <td>2026-05-12 05:13:11.481781+00:00</td>
-      <td>svc_backup</td>
-      <td>10</td>
-      <td>10.10.10.58</td>
-      <td>{9d4f92d8-07cb-fde3-ae92-151f5d1e1a82}</td>
-      <td>0x00000000009b3c9a</td>
-    </tr>
-    <tr>
-      <th>541</th>
-      <td>2026-05-12 05:13:11.481789+00:00</td>
-      <td>svc_backup</td>
-      <td>10</td>
-      <td>10.10.10.58</td>
-      <td>{00000000-0000-0000-0000-000000000000}</td>
-      <td>0x00000000009b3cc4</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
+| Timestamp | TargetUserName | LogonType | IpAddress | LogonGuid | TargetLogonId |\n| --- | --- | --- | --- | --- | --- |\n| 2026-05-12 05:13:11.481781+00:00 | svc_backup | 10 | 10.10.10.58 | {9d4f92d8-07cb-fde3-ae92-151f5d1e1a82} | 0x00000000009b3c9a |\n| 2026-05-12 05:13:11.481789+00:00 | svc_backup | 10 | 10.10.10.58 | {00000000-0000-0000-0000-000000000000} | 0x00000000009b3cc4 |
 
 
 ### Question 5 — RDP Session ID
@@ -1523,63 +503,16 @@ What Session ID was assigned to the successful RDP logon?
 
 
 ```python
-
-# Display all Event ID 21 records
-df_rdplocal[
-    df_rdplocal["Address"] == "10.10.10.58" 
+# Display RDP session events for the assigned VPN pool IP
+result = df_rdplocal[
+    df_rdplocal["Address"] == "10.10.10.58"
 ][["Timestamp", "EventID", "User", "SessionID", "Address"]]
 
+display_md(result)
 ```
 
 
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Timestamp</th>
-      <th>EventID</th>
-      <th>User</th>
-      <th>SessionID</th>
-      <th>Address</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>34</th>
-      <td>2026-05-12 05:13:13.131023+00:00</td>
-      <td>25</td>
-      <td>GLOBALTEK\svc_backup</td>
-      <td>7</td>
-      <td>10.10.10.58</td>
-    </tr>
-    <tr>
-      <th>53</th>
-      <td>2026-05-12 05:33:51.360374+00:00</td>
-      <td>24</td>
-      <td>GLOBALTEK\svc_backup</td>
-      <td>7</td>
-      <td>10.10.10.58</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
+| Timestamp | EventID | User | SessionID | Address |\n| --- | --- | --- | --- | --- |\n| 2026-05-12 05:13:13.131023+00:00 | 25 | GLOBALTEK\svc_backup | 7 | 10.10.10.58 |\n| 2026-05-12 05:33:51.360374+00:00 | 24 | GLOBALTEK\svc_backup | 7 | 10.10.10.58 |
 
 
 ### Question 6 — ProfileList Registry Last Write Timestamp
@@ -1591,46 +524,15 @@ What is the Last Write Timestamp for the `svc_backup` user's ProfileList registr
 
 ```python
 # Identify svc_backup profile
-df_software[
+result = df_software[
     df_software["ProfileImagePath"].str.contains(
         "svc_backup", case=False, na=False
     )
 ]
+
+display_md(result)
 ```
 
 
+| SID | ProfileImagePath | LastWriteTimestamp |\n| --- | --- | --- |\n| S-1-5-21-1355340450-508628708-815639551-1112 | C:\Users\svc_backup | 2026-05-12 05:32:27.092868 |
 
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>SID</th>
-      <th>ProfileImagePath</th>
-      <th>LastWriteTimestamp</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>3</th>
-      <td>S-1-5-21-1355340450-508628708-815639551-1112</td>
-      <td>C:\Users\svc_backup</td>
-      <td>2026-05-12 05:32:27.092868</td>
-    </tr>
-  </tbody>
-</table>
-</div>
