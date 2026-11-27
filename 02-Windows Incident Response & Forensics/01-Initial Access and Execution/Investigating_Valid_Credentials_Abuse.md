@@ -323,7 +323,7 @@ for line in nps_path.read_text(errors="replace").splitlines():
         nps_records.append(record)
 
 df_nps_txt = pd.DataFrame(nps_records)
-
+```
 # Hands-On Investigation
 
 ### Question 1 — NPS Access Granted Time
